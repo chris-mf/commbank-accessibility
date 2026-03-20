@@ -39,10 +39,10 @@ export default function BranchCard({ branch, userNeeds, onSelect, selected }: Br
       onClick={() => onSelect(branch)}
       className={`
         w-full text-left p-4 rounded-xl border-2 transition-all mb-3
-        focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2
+        focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:ring-offset-2
         cursor-pointer
         ${selected
-          ? 'border-yellow-400 bg-yellow-50 shadow-md'
+          ? 'border-brand-yellow bg-brand-yellow/10 shadow-md'
           : 'border-gray-200 bg-white hover:border-gray-400 hover:shadow-sm'
         }
       `}

@@ -8,14 +8,15 @@ import {
   getStepSelectionKey,
   getCurrentStage,
   getAccessibilityAcknowledgement,
+  FLOW_STEPS,
 } from '@/lib/flow';
 import { filterAndRankBranches } from '@/lib/branches';
 import ProgressBar from './ProgressBar';
 import ChatMessage from './ChatMessage';
 import ChoiceChips from './ChoiceChips';
-import TextInput from './TextInput';
 import BranchCard from './BranchCard';
 import VisitPlan from './VisitPlan';
+import TypingIndicator from './TypingIndicator';
 
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>(getInitialMessages);
@@ -26,7 +27,10 @@ export default function Chat() {
   const [filteredBranches, setFilteredBranches] = useState<Branch[]>([]);
   const [showVisitPlan, setShowVisitPlan] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [inputValue, setInputValue] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -36,80 +40,189 @@ export default function Chat() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, showBranches, showVisitPlan, scrollToBottom]);
+  }, [messages, showBranches, showVisitPlan, isTyping, scrollToBottom]);
 
   function addMessage(msg: Message) {
     setMessages((prev) => [...prev, msg]);
   }
 
-  function addBotMessageDelayed(msg: Message, delay = 600) {
+  function showTypingThenMessage(msg: Message, delay = 800) {
+    setIsTyping(true);
     setTimeout(() => {
+      setIsTyping(false);
       setMessages((prev) => [...prev, msg]);
     }, delay);
   }
 
+  function showTypingThenCallback(callback: () => void, delay = 800) {
+    setIsTyping(true);
+    setTimeout(() => {
+      setIsTyping(false);
+      callback();
+    }, delay);
+  }
+
+  // Match free-text input to a choice option
+  function matchTextToChoice(text: string, choices: { id: string; label: string }[]): string | null {
+    const lower = text.toLowerCase().trim();
+    // Direct match
+    for (const c of choices) {
+      if (c.label.toLowerCase() === lower) return c.id;
+      if (c.id === lower) return c.id;
+    }
+    // Partial match
+    for (const c of choices) {
+      if (c.label.toLowerCase().includes(lower) || lower.includes(c.label.toLowerCase())) return c.id;
+    }
+    // Keyword matching
+    if (lower.includes('new account') || lower.includes('open')) return choices.find(c => c.id === 'open-account')?.id || null;
+    if (lower.includes('existing') || lower.includes('question')) return choices.find(c => c.id === 'existing-account')?.id || null;
+    return null;
+  }
+
+  function handleTextSubmit(text: string) {
+    if (!text.trim()) return;
+
+    // Add user message immediately
+    addMessage({
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: text,
+      type: 'text',
+    });
+    setInputValue('');
+
+    const lastMsg = messages[messages.length - 1];
+
+    // If welcome stage, advance to task selection then try to match
+    if (currentStepId === 'welcome') {
+      const taskStep = FLOW_STEPS.find(s => s.id === 'task-selection');
+      if (taskStep?.choices) {
+        const matched = matchTextToChoice(text, taskStep.choices);
+        if (matched) {
+          // Skip showing choices, go directly
+          const newSelections = { ...selections, primaryTask: matched };
+          setSelections(newSelections);
+          setCurrentStepId('task-selection');
+          advanceAfterAnswer('task-selection', newSelections);
+          return;
+        }
+      }
+      // No match — show the choices
+      showTypingThenCallback(() => {
+        const next = getNextBotMessage('welcome', selections);
+        if (next) {
+          setCurrentStepId(next.stepId);
+          setCurrentStage(getCurrentStage(next.stepId));
+          addMessage(next.message);
+        }
+      });
+      return;
+    }
+
+    // If current step expects choices, try to match
+    if (lastMsg?.choices) {
+      const matched = matchTextToChoice(text, lastMsg.choices);
+      if (matched) {
+        processChoiceAnswer(matched);
+        return;
+      }
+    }
+
+    // If current step expects text input, just use the text
+    if (lastMsg?.type === 'text-input') {
+      processChoiceAnswer(text);
+      return;
+    }
+
+    // Fallback — echo back a helpful message
+    showTypingThenMessage({
+      id: `bot-fallback-${Date.now()}`,
+      role: 'bot',
+      content: "I didn't quite catch that. You can use the options above, or type your answer and I'll do my best to understand.",
+      type: 'text',
+      stage: currentStage,
+    });
+  }
+
+  function processChoiceAnswer(answer: string | string[]) {
+    handleAnswer(answer);
+  }
+
   function handleAnswer(answer: string | string[]) {
-    // Record the user's answer
     const selectionKey = getStepSelectionKey(currentStepId);
     const newSelections = { ...selections };
 
     if (selectionKey) {
-      if (Array.isArray(answer)) {
-        (newSelections as Record<string, unknown>)[selectionKey] = answer;
-      } else {
-        (newSelections as Record<string, unknown>)[selectionKey] = answer;
-      }
+      (newSelections as Record<string, unknown>)[selectionKey] = answer;
     }
     setSelections(newSelections);
 
-    // Show user message
-    const displayText = Array.isArray(answer)
-      ? answer
-          .map((a) => {
-            const lastMsg = messages[messages.length - 1];
-            return lastMsg?.choices?.find((c) => c.id === a)?.label || a;
-          })
-          .join(', ')
-      : messages[messages.length - 1]?.choices?.find((c) => c.id === answer)?.label || answer;
+    // Show user message (only if not already added by text input)
+    const lastMsg = messages[messages.length - 1];
+    const isFromTextInput = lastMsg?.role === 'user';
+    if (!isFromTextInput) {
+      const displayText = Array.isArray(answer)
+        ? answer
+            .map((a) => {
+              const botMsg = [...messages].reverse().find(m => m.role === 'bot');
+              return botMsg?.choices?.find((c) => c.id === a)?.label || a;
+            })
+            .join(', ')
+        : [...messages].reverse().find(m => m.role === 'bot')?.choices?.find((c) => c.id === answer)?.label || answer;
 
-    addMessage({
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: displayText,
-      type: 'text',
-    });
+      addMessage({
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: String(displayText),
+        type: 'text',
+      });
+    }
 
-    // Check for accessibility acknowledgement after stage 2
-    if (currentStepId === 'accessibility-needs') {
-      const needs = Array.isArray(answer) ? answer : [answer];
+    advanceAfterAnswer(currentStepId, newSelections, answer);
+  }
+
+  function advanceAfterAnswer(stepId: string, newSelections: UserSelections, answer?: string | string[]) {
+    // Accessibility acknowledgement
+    if (stepId === 'accessibility-needs') {
+      const needs = Array.isArray(answer) ? answer : newSelections.accessibilityNeeds;
       const ack = getAccessibilityAcknowledgement(needs);
       if (ack) {
-        addBotMessageDelayed({
+        showTypingThenMessage({
           id: `ack-${Date.now()}`,
           role: 'bot',
           content: ack,
           type: 'text',
           stage: Stage.ACCESSIBILITY,
-        }, 400);
+        }, 600);
+        // Then advance after ack
+        setTimeout(() => {
+          const next = getNextBotMessage(stepId, newSelections);
+          if (next) {
+            showTypingThenCallback(() => {
+              setCurrentStepId(next.stepId);
+              setCurrentStage(getCurrentStage(next.stepId));
+              addMessage(next.message);
+            });
+          } else {
+            triggerBranchFinder(newSelections);
+          }
+        }, 1400);
+        return;
       }
     }
 
-    // Get next step
-    const baseDelay = currentStepId === 'accessibility-needs' && getAccessibilityAcknowledgement(
-      Array.isArray(answer) ? answer : [answer]
-    ) ? 1200 : 600;
-
-    setTimeout(() => {
-      const next = getNextBotMessage(currentStepId, newSelections);
+    // Normal advance
+    showTypingThenCallback(() => {
+      const next = getNextBotMessage(stepId, newSelections);
       if (next) {
         setCurrentStepId(next.stepId);
         setCurrentStage(getCurrentStage(next.stepId));
         addMessage(next.message);
       } else {
-        // Flow complete — show branch finder
         triggerBranchFinder(newSelections);
       }
-    }, baseDelay);
+    });
   }
 
   function triggerBranchFinder(sel: UserSelections) {
@@ -161,21 +274,18 @@ export default function Chat() {
       type: 'text',
     });
 
-    // Ask about appointment
-    setTimeout(() => {
-      addMessage({
-        id: `appt-${Date.now()}`,
-        role: 'bot',
-        content: `Great choice! ${selectedBranch.name} is a good match for your needs.\n\nWould you like to book an appointment, or would you prefer to walk in?`,
-        type: 'choices',
-        choices: [
-          { id: 'book', label: 'Book an appointment (call branch)' },
-          { id: 'walk-in', label: "I'll walk in" },
-        ],
-        stage: Stage.BRANCH_FINDER,
-      });
-      setCurrentStepId('appointment-type');
-    }, 600);
+    showTypingThenMessage({
+      id: `appt-${Date.now()}`,
+      role: 'bot',
+      content: `Great choice! ${selectedBranch.name} is a good match for your needs.\n\nWould you like to book an appointment, or would you prefer to walk in?`,
+      type: 'choices',
+      choices: [
+        { id: 'book', label: 'Book an appointment (call branch)' },
+        { id: 'walk-in', label: "I'll walk in" },
+      ],
+      stage: Stage.BRANCH_FINDER,
+    });
+    setCurrentStepId('appointment-type');
   }
 
   function handleAppointmentSelect(answer: string | string[]) {
@@ -191,8 +301,7 @@ export default function Chat() {
       type: 'text',
     });
 
-    // Show visit plan
-    setTimeout(() => {
+    showTypingThenCallback(() => {
       setCurrentStage(Stage.VISIT_PLAN);
       addMessage({
         id: `plan-intro-${Date.now()}`,
@@ -202,24 +311,53 @@ export default function Chat() {
         stage: Stage.VISIT_PLAN,
       });
       setTimeout(() => setShowVisitPlan(true), 400);
-    }, 600);
+    });
   }
 
-  // Determine the current interactive element
   const lastMessage = messages[messages.length - 1];
-  const isAwaitingInput = lastMessage?.role === 'bot' && !showBranches && !showVisitPlan;
+  const isAwaitingInput = lastMessage?.role === 'bot' && !showBranches && !showVisitPlan && !isTyping;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
+      {/* Top header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-gray-900">
+                <path d="M12 2L2 12l10 10 10-10L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-gray-900">CommBank Branch Assistant</span>
+          </div>
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-300
+                       text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900
+                       transition-colors cursor-pointer focus:outline-none focus:ring-2
+                       focus:ring-brand-yellow focus:ring-offset-1"
+            onClick={() => window.open('tel:13 2221')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+            </svg>
+            Need help? Speak to a human
+          </button>
+        </div>
+      </div>
+
       <ProgressBar currentStage={currentStage} />
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      {/* Chat area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-24">
         <div className="max-w-2xl mx-auto px-4 py-6" role="log" aria-live="polite" aria-label="Chat messages">
           {messages.map((msg) => (
             <ChatMessage key={msg.id} message={msg} />
           ))}
 
-          {/* Choice chips for current question */}
+          {/* Typing indicator */}
+          {isTyping && <TypingIndicator />}
+
+          {/* Choice cards for current question */}
           {isAwaitingInput && lastMessage.type === 'choices' && lastMessage.choices && (
             <ChoiceChips
               choices={lastMessage.choices}
@@ -228,17 +366,9 @@ export default function Chat() {
             />
           )}
 
-          {/* Text input */}
-          {isAwaitingInput && lastMessage.type === 'text-input' && (
-            <TextInput
-              placeholder={lastMessage.inputPlaceholder}
-              onSubmit={(val) => handleAnswer(val)}
-            />
-          )}
-
           {/* Branch cards */}
           {showBranches && (
-            <div className="mb-4 ml-10.5">
+            <div className="mb-4 ml-12">
               {filteredBranches.slice(0, 5).map((branch) => (
                 <BranchCard
                   key={branch.id}
@@ -251,9 +381,9 @@ export default function Chat() {
               {selectedBranch && (
                 <button
                   onClick={handleBranchConfirm}
-                  className="w-full mt-2 py-3.5 bg-yellow-400 text-gray-900 rounded-xl text-base
-                             font-semibold hover:bg-yellow-500 transition-colors cursor-pointer
-                             focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
+                  className="w-full mt-2 py-3.5 bg-brand-yellow text-gray-900 rounded-xl text-base
+                             font-semibold hover:brightness-95 transition-all cursor-pointer
+                             focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:ring-offset-2"
                 >
                   Confirm: {selectedBranch.name}
                 </button>
@@ -263,13 +393,56 @@ export default function Chat() {
 
           {/* Visit plan */}
           {showVisitPlan && (
-            <div className="mb-4 ml-10.5">
+            <div className="mb-4 ml-12">
               <VisitPlan selections={selections} />
             </div>
           )}
 
           <div className="h-4" />
         </div>
+      </div>
+
+      {/* Fixed bottom input bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleTextSubmit(inputValue);
+          }}
+          className="max-w-2xl mx-auto px-4 py-3 flex gap-2 items-center"
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Type a message..."
+            disabled={showVisitPlan}
+            className="flex-1 px-4 py-3 rounded-xl border border-gray-300 text-base
+                       focus:outline-none focus:border-brand-yellow focus:ring-2 focus:ring-brand-yellow/30
+                       text-gray-800 placeholder-gray-400 bg-gray-50
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          <button
+            type="submit"
+            disabled={!inputValue.trim() || showVisitPlan}
+            className={`
+              p-3 rounded-xl transition-all
+              focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:ring-offset-2
+              ${
+                inputValue.trim()
+                  ? 'bg-brand-yellow text-gray-900 hover:brightness-95 cursor-pointer'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }
+            `}
+            aria-label="Send message"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </form>
       </div>
     </div>
   );

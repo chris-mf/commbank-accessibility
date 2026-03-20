@@ -3,6 +3,7 @@
 @theme inline {
   --color-background: #f9fafb;
   --color-foreground: #111827;
+  --color-brand-yellow: #FFFF00;
 }
 
 body {
@@ -28,4 +29,14 @@ body {
 
 .overflow-y-auto {
   scroll-behavior: smooth;
+}
+
+/* Typing bounce animation */
+@keyframes bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
 }

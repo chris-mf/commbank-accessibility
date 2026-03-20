@@ -28,7 +28,7 @@ export default function VisitPlan({ selections }: VisitPlanProps) {
   return (
     <div className="space-y-4 print:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-yellow-400 to-yellow-300 rounded-xl p-5 text-gray-900 print:border print:border-gray-300">
+      <div className="bg-gradient-to-r from-brand-yellow to-brand-yellow/80 rounded-xl p-5 text-gray-900 print:border print:border-gray-300">
         <h2 className="text-lg font-bold mb-1">Your Branch Visit Plan</h2>
         <p className="text-sm opacity-80">Everything you need for your CommBank visit</p>
       </div>
@@ -46,7 +46,7 @@ export default function VisitPlan({ selections }: VisitPlanProps) {
         <div className="space-y-2">
           {expectations.map((point, i) => (
             <div key={i} className="flex gap-2 text-sm text-gray-700">
-              <span className="text-yellow-500 mt-0.5 flex-shrink-0">▸</span>
+              <span className="text-brand-yellow mt-0.5 flex-shrink-0">▸</span>
               <span>{point}</span>
             </div>
           ))}
@@ -117,7 +117,7 @@ export default function VisitPlan({ selections }: VisitPlanProps) {
           </p>
           <div className="border border-gray-200 rounded-lg p-4 bg-white">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center text-xs font-bold text-gray-900">
+              <div className="w-8 h-8 rounded-full bg-brand-yellow flex items-center justify-center text-xs font-bold text-gray-900">
                 CBA
               </div>
               <div>
@@ -131,13 +131,13 @@ export default function VisitPlan({ selections }: VisitPlanProps) {
                 .filter((n) => n !== 'none' && n !== 'other')
                 .map((need) => (
                   <div key={need} className="flex gap-2 text-sm text-gray-700">
-                    <span className="text-yellow-500">•</span>
+                    <span className="text-brand-yellow">•</span>
                     <span>{NEED_LABELS[need] || need}</span>
                   </div>
                 ))}
               {selections.accessibilityOther && (
                 <div className="flex gap-2 text-sm text-gray-700">
-                  <span className="text-yellow-500">•</span>
+                  <span className="text-brand-yellow">•</span>
                   <span>{selections.accessibilityOther}</span>
                 </div>
               )}
@@ -164,21 +164,83 @@ export default function VisitPlan({ selections }: VisitPlanProps) {
         </div>
       </Section>
 
-      {/* Print button */}
-      <div className="flex gap-3" data-print-hide>
-        <button
-          onClick={() => window.print()}
-          className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold
-                     hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2
-                     focus:ring-yellow-400 focus:ring-offset-2 cursor-pointer"
-        >
-          Print or save this plan
-        </button>
+      {/* Actions */}
+      <div className="flex flex-col gap-3" data-print-hide>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.print()}
+            className="flex-1 py-3.5 bg-gray-900 text-white rounded-xl text-sm font-semibold
+                       hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2
+                       focus:ring-brand-yellow focus:ring-offset-2 cursor-pointer
+                       flex items-center justify-center gap-2"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            Print or save this plan
+          </button>
+          <button
+            onClick={() => {
+              const subject = encodeURIComponent('My CommBank Branch Visit Plan');
+              const bodyParts: string[] = [];
+              bodyParts.push('MY COMMBANK BRANCH VISIT PLAN');
+              bodyParts.push('================================\n');
+              if (selections.primaryTask === 'open-account') {
+                bodyParts.push(`Task: Opening a new ${selections.accountType === 'smart-access' ? 'Smart Access' : selections.accountType === 'saver' ? 'savings' : 'bank'} account${selections.customerType === 'new' ? ' (new customer)' : ''}`);
+              } else {
+                bodyParts.push('Task: Branch visit');
+              }
+              bodyParts.push('');
+              if (branch) {
+                bodyParts.push(`Branch: ${branch.name}`);
+                bodyParts.push(`Address: ${branch.address}, ${branch.suburb} ${branch.postcode}`);
+                bodyParts.push(`Hours: ${branch.hours}`);
+                bodyParts.push(`Phone: ${branch.phone}`);
+                bodyParts.push('');
+              }
+              bodyParts.push('WHAT TO BRING:');
+              checklist.forEach((item) => {
+                bodyParts.push(`${item.required ? '[REQUIRED]' : '[ ]'} ${item.text}${item.note ? ` - ${item.note}` : ''}`);
+              });
+              bodyParts.push('');
+              if (selections.accessibilityNeeds.length > 0 && !selections.accessibilityNeeds.includes('none')) {
+                bodyParts.push('MY PREFERENCES:');
+                selections.accessibilityNeeds
+                  .filter((n) => n !== 'none' && n !== 'other')
+                  .forEach((need) => {
+                    bodyParts.push(`- ${NEED_LABELS[need] || need}`);
+                  });
+                if (selections.accessibilityOther) {
+                  bodyParts.push(`- ${selections.accessibilityOther}`);
+                }
+                bodyParts.push('');
+              }
+              bodyParts.push('ACCESSIBILITY PROGRAMS:');
+              bodyParts.push('- Equal Access Toolkit: Available at all branches');
+              bodyParts.push('- Customer Preference Card: Tell staff about your needs');
+              bodyParts.push('- Hidden Disabilities Sunflower: Staff are trained to offer support');
+              const body = encodeURIComponent(bodyParts.join('\n'));
+              window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            }}
+            className="flex-1 py-3.5 bg-brand-yellow text-gray-900 rounded-xl text-sm font-semibold
+                       hover:brightness-95 transition-all focus:outline-none focus:ring-2
+                       focus:ring-brand-yellow focus:ring-offset-2 cursor-pointer
+                       flex items-center justify-center gap-2"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            Email me this plan
+          </button>
+        </div>
         <button
           onClick={() => window.location.reload()}
-          className="px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-xl text-sm font-medium
+          className="w-full py-3 border-2 border-gray-300 text-gray-700 rounded-xl text-sm font-medium
                      hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2
-                     focus:ring-yellow-400 focus:ring-offset-2 cursor-pointer"
+                     focus:ring-brand-yellow focus:ring-offset-2 cursor-pointer"
         >
           Start over
         </button>
@@ -191,7 +253,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
       <h3 className="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">
-        <span className="w-1 h-4 bg-yellow-400 rounded-full inline-block" />
+        <span className="w-1 h-4 bg-brand-yellow rounded-full inline-block" />
         {title}
       </h3>
       {children}

@@ -21,7 +21,7 @@ export default function ProgressBar({ currentStage }: ProgressBarProps) {
               <div className="flex items-center w-full mb-1.5">
                 <div
                   className={`flex-1 h-1 rounded-full transition-colors ${
-                    isCompleted ? 'bg-yellow-400' : isActive ? 'bg-yellow-400' : 'bg-gray-200'
+                    isCompleted || isActive ? 'bg-brand-yellow' : 'bg-gray-200'
                   }`}
                 />
               </div>

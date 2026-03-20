@@ -17,7 +17,14 @@ const FLOW_STEPS: FlowStep[] = [
   {
     id: 'welcome',
     stage: Stage.TASK,
-    message: "Hi! I'm here to help you plan a visit to a CommBank branch. I'll ask you a few questions so I can find the right branch and make sure everything is set up for you.\n\nWhat would you like to do today?",
+    message: "Hi there! I'm your CommBank branch assistant. I can help you plan a branch visit and make sure everything is set up for you.\n\nWhat can I help you with today?",
+    type: 'text',
+    selectionKey: 'primaryTask',
+  },
+  {
+    id: 'task-selection',
+    stage: Stage.TASK,
+    message: "Here are some things I can help with:",
     type: 'choices',
     choices: [
       { id: 'open-account', label: 'Open a new bank account' },
@@ -41,12 +48,13 @@ const FLOW_STEPS: FlowStep[] = [
   {
     id: 'account-type',
     stage: Stage.TASK,
-    message: "Great! Here are the main account types — don't worry, branch staff can help you choose the best one:\n\n• **Smart Access** — An everyday spending account with a debit card\n• **NetBank Saver** — A savings account you manage online\n• **Goal Saver** — A savings account that rewards you for depositing each month",
+    message: "What type of account are you looking for? Don't worry, branch staff can help you choose the best one.",
     type: 'choices',
     choices: [
-      { id: 'smart-access', label: 'Everyday spending (Smart Access)' },
-      { id: 'saver', label: 'Savings account' },
-      { id: 'not-sure', label: "I'm not sure yet" },
+      { id: 'smart-access', label: 'Smart Access', description: 'An everyday spending account with a debit card' },
+      { id: 'saver', label: 'NetBank Saver', description: 'A savings account you manage online' },
+      { id: 'goal-saver', label: 'Goal Saver', description: 'A savings account that rewards you for depositing each month' },
+      { id: 'not-sure', label: "I'm not sure yet", description: "That's okay — staff will help you choose in branch" },
     ],
     condition: (s) => s.primaryTask === 'open-account',
     selectionKey: 'accountType',
@@ -152,16 +160,13 @@ function makeId(): string {
 }
 
 export function getInitialMessages(): Message[] {
-  const firstStep = FLOW_STEPS[0];
   return [
     {
       id: makeId(),
       role: 'bot',
-      content: firstStep.message,
-      type: firstStep.type,
-      choices: firstStep.choices,
-      multiSelect: firstStep.multiSelect,
-      stage: firstStep.stage,
+      content: "Hi there! I'm your CommBank branch assistant. I can help you plan a branch visit and make sure everything is set up for you.\n\nWhat can I help you with today?",
+      type: 'text',
+      stage: Stage.TASK,
     },
   ];
 }
