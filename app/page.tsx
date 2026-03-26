@@ -1,45 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-
-interface PrototypeCard {
-  id: string;
-  title: string;
-  hmw: string;
-  href: string;
-  status: 'live' | 'coming-soon';
-}
-
-const DEFAULT_CARDS: PrototypeCard[] = [
-  {
-    id: 'proto-1',
-    title: 'Branch Accessibility Assistant',
-    hmw: 'How might we help customers with accessibility needs feel confident and prepared before visiting a branch?',
-    href: '/branch-assistant',
-    status: 'live',
-  },
-  {
-    id: 'proto-2',
-    title: 'Prototype 2',
-    hmw: 'How might we...',
-    href: '',
-    status: 'coming-soon',
-  },
-  {
-    id: 'proto-3',
-    title: 'Prototype 3',
-    hmw: 'How might we...',
-    href: '',
-    status: 'coming-soon',
-  },
-  {
-    id: 'proto-4',
-    title: 'Prototype 4',
-    hmw: 'How might we...',
-    href: '',
-    status: 'coming-soon',
-  },
-];
+import { DEFAULT_CARDS, type PrototypeCard } from '@/lib/cards';
 
 const STORAGE_KEY = 'prototype-hub-cards';
 
@@ -50,28 +12,60 @@ export default function Home() {
   const titleRefs = useRef<Record<string, HTMLHeadingElement | null>>({});
   const hmwRefs = useRef<Record<string, HTMLParagraphElement | null>>({});
 
-  // Load from localStorage on mount
+  // Load from API on mount, fallback to localStorage
   useEffect(() => {
     setMounted(true);
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as PrototypeCard[];
-        // Merge saved data with defaults to preserve any new defaults
-        const merged = DEFAULT_CARDS.map((def) => {
-          const saved_card = parsed.find((s) => s.id === def.id);
-          return saved_card ? { ...def, title: saved_card.title, hmw: saved_card.hmw } : def;
-        });
-        setCards(merged);
+
+    async function loadCards() {
+      try {
+        const res = await fetch('/api/cards');
+        if (res.ok) {
+          const data = await res.json();
+          setCards(data);
+          return;
+        }
+      } catch {
+        // API unavailable — fall through to localStorage
       }
-    } catch {
-      // ignore
+      // Fallback: localStorage
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as PrototypeCard[];
+          const merged = DEFAULT_CARDS.map((def) => {
+            const saved_card = parsed.find((s) => s.id === def.id);
+            return saved_card ? { ...def, title: saved_card.title, hmw: saved_card.hmw } : def;
+          });
+          setCards(merged);
+        }
+      } catch {
+        // ignore
+      }
     }
+
+    loadCards();
   }, []);
 
-  function saveCards(updated: PrototypeCard[]) {
+  async function saveCards(updated: PrototypeCard[]) {
     setCards(updated);
+    // Write-through to localStorage as cache
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    // Find which card changed and save to API
+    const changed = updated.find(
+      (u) => !cards.some((c) => c.id === u.id && c.title === u.title && c.hmw === u.hmw)
+    );
+    if (changed) {
+      try {
+        await fetch('/api/cards', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: changed.id, title: changed.title, hmw: changed.hmw }),
+        });
+      } catch {
+        // KV save failed — localStorage already has it
+      }
+    }
   }
 
   function handleSave(cardId: string) {
