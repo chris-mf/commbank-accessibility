@@ -77,6 +77,8 @@ export default function Chat() {
     // Keyword matching
     if (lower.includes('new account') || lower.includes('open')) return choices.find(c => c.id === 'open-account')?.id || null;
     if (lower.includes('existing') || lower.includes('question')) return choices.find(c => c.id === 'existing-account')?.id || null;
+    if (lower.includes('plan') || lower.includes('visit')) return choices.find(c => c.id === 'plan-visit')?.id || null;
+    if (lower.includes('book') || lower.includes('appointment')) return choices.find(c => c.id === 'book-appointment')?.id || null;
     return null;
   }
 
@@ -94,28 +96,25 @@ export default function Chat() {
 
     const lastMsg = messages[messages.length - 1];
 
-    // If welcome stage, advance to task selection then try to match
+    // If welcome stage, try to match text to the welcome choices
     if (currentStepId === 'welcome') {
-      const taskStep = FLOW_STEPS.find(s => s.id === 'task-selection');
-      if (taskStep?.choices) {
-        const matched = matchTextToChoice(text, taskStep.choices);
+      const welcomeStep = FLOW_STEPS.find(s => s.id === 'welcome');
+      if (welcomeStep?.choices) {
+        const matched = matchTextToChoice(text, welcomeStep.choices);
         if (matched) {
-          // Skip showing choices, go directly
           const newSelections = { ...selections, primaryTask: matched };
           setSelections(newSelections);
-          setCurrentStepId('task-selection');
-          advanceAfterAnswer('task-selection', newSelections);
+          advanceAfterAnswer('welcome', newSelections);
           return;
         }
       }
-      // No match — show the choices
-      showTypingThenCallback(() => {
-        const next = getNextBotMessage('welcome', selections);
-        if (next) {
-          setCurrentStepId(next.stepId);
-          setCurrentStage(getCurrentStage(next.stepId));
-          addMessage(next.message);
-        }
+      // No match — show a helpful nudge
+      showTypingThenMessage({
+        id: `bot-nudge-${Date.now()}`,
+        role: 'bot',
+        content: "I didn't quite catch that. You can pick one of the options above, or type something like 'open an account' or 'plan my visit'.",
+        type: 'text',
+        stage: currentStage,
       });
       return;
     }
@@ -124,14 +123,14 @@ export default function Chat() {
     if (lastMsg?.choices) {
       const matched = matchTextToChoice(text, lastMsg.choices);
       if (matched) {
-        processChoiceAnswer(matched);
+        processChoiceAnswer(matched, true);
         return;
       }
     }
 
     // If current step expects text input, just use the text
     if (lastMsg?.type === 'text-input') {
-      processChoiceAnswer(text);
+      processChoiceAnswer(text, true);
       return;
     }
 
@@ -145,11 +144,11 @@ export default function Chat() {
     });
   }
 
-  function processChoiceAnswer(answer: string | string[]) {
-    handleAnswer(answer);
+  function processChoiceAnswer(answer: string | string[], skipUserMessage = false) {
+    handleAnswer(answer, skipUserMessage);
   }
 
-  function handleAnswer(answer: string | string[]) {
+  function handleAnswer(answer: string | string[], skipUserMessage = false) {
     const selectionKey = getStepSelectionKey(currentStepId);
     const newSelections = { ...selections };
 
@@ -159,9 +158,7 @@ export default function Chat() {
     setSelections(newSelections);
 
     // Show user message (only if not already added by text input)
-    const lastMsg = messages[messages.length - 1];
-    const isFromTextInput = lastMsg?.role === 'user';
-    if (!isFromTextInput) {
+    if (!skipUserMessage) {
       const displayText = Array.isArray(answer)
         ? answer
             .map((a) => {
