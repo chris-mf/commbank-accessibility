@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CommBank Accessibility Branch Planning Assistant",
-  description: "Plan your CommBank branch visit with personalised accessibility support",
+  title: "Co-design Hub",
+  description: "Design explorations & prototypes",
 };
 
 export default function RootLayout({
