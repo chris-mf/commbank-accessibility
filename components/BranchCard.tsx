@@ -26,13 +26,32 @@ export default function BranchCard({ branch, userNeeds, onSelect, selected }: Br
     'wheelchair': 'wheelchairAccess',
   };
 
-  const matchedFeatures = Object.entries(branch.features)
+  // Features available at this branch
+  const availableFeatures = Object.entries(branch.features)
     .filter(([, available]) => available)
     .map(([key]) => key as keyof BranchFeatures);
 
-  const highlightedFeatures = userNeeds
+  // Features the user asked for that this branch has
+  const yourNeeds = userNeeds
     .map((need) => needsMap[need])
     .filter((f): f is keyof BranchFeatures => !!f && branch.features[f]);
+
+  // Other features available but not requested
+  const alsoAvailable = availableFeatures.filter(f => !yourNeeds.includes(f));
+
+  const renderPill = (featureKey: keyof BranchFeatures, variant: 'match' | 'extra') => (
+    <span
+      key={featureKey}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+        variant === 'match'
+          ? 'bg-green-100 text-green-900 ring-1 ring-green-300'
+          : 'bg-gray-100 text-gray-800 ring-1 ring-gray-200'
+      }`}
+    >
+      <span aria-hidden>{FEATURE_ICONS[featureKey]}</span>
+      {getFeatureLabel(featureKey)}
+    </span>
+  );
 
   return (
     <button
@@ -58,26 +77,25 @@ export default function BranchCard({ branch, userNeeds, onSelect, selected }: Br
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {matchedFeatures.map((featureKey) => {
-          const isHighlighted = highlightedFeatures.includes(featureKey);
-          return (
-            <span
-              key={featureKey}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
-                isHighlighted
-                  ? 'bg-green-100 text-green-800 font-medium'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              <span aria-hidden>{FEATURE_ICONS[featureKey]}</span>
-              {getFeatureLabel(featureKey)}
-            </span>
-          );
-        })}
-      </div>
+      {yourNeeds.length > 0 && (
+        <div className="mb-2">
+          <p className="text-xs font-semibold text-green-800 uppercase tracking-wide mb-1.5">What you asked for</p>
+          <div className="flex flex-wrap gap-2">
+            {yourNeeds.map(f => renderPill(f, 'match'))}
+          </div>
+        </div>
+      )}
 
-      <div className="flex items-center justify-between text-xs text-gray-500">
+      {alsoAvailable.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 mt-2">Also available</p>
+          <div className="flex flex-wrap gap-2">
+            {alsoAvailable.map(f => renderPill(f, 'extra'))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between text-xs text-gray-500 mt-2">
         <span>{branch.hours}</span>
         <span>{branch.driveMinutes} min drive</span>
       </div>

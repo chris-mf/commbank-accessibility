@@ -27,6 +27,22 @@ const FLOW_STEPS: FlowStep[] = [
     selectionKey: 'primaryTask',
   },
   {
+    id: 'visit-reason',
+    stage: Stage.TASK,
+    message: "What do you need to do at the branch? Pick from the list or type your own answer.",
+    type: 'choices',
+    choices: [
+      { id: 'open-account', label: 'Open a new account' },
+      { id: 'close-account', label: 'Close an account' },
+      { id: 'loan-enquiry', label: 'Discuss a loan or mortgage' },
+      { id: 'card-issue', label: 'Replace a lost or stolen card' },
+      { id: 'id-verification', label: 'Verify my identity' },
+      { id: 'general-enquiry', label: 'General enquiry' },
+    ],
+    condition: (s) => s.primaryTask === 'plan-visit',
+    selectionKey: 'visitReason',
+  },
+  {
     id: 'customer-type',
     stage: Stage.TASK,
     message: 'Are you already a CommBank customer, or will this be your first time banking with us?',
@@ -35,7 +51,7 @@ const FLOW_STEPS: FlowStep[] = [
       { id: 'new', label: "I'm new to CommBank" },
       { id: 'existing', label: "I'm already a customer" },
     ],
-    condition: (s) => s.primaryTask === 'open-account',
+    condition: (s) => s.primaryTask === 'open-account' || s.visitReason === 'open-account',
     selectionKey: 'customerType',
   },
   {
@@ -49,7 +65,7 @@ const FLOW_STEPS: FlowStep[] = [
       { id: 'goal-saver', label: 'Goal Saver', description: 'A savings account that rewards you for depositing each month' },
       { id: 'not-sure', label: "I'm not sure yet", description: "That's okay — staff will help you choose in branch" },
     ],
-    condition: (s) => s.primaryTask === 'open-account',
+    condition: (s) => s.primaryTask === 'open-account' || s.visitReason === 'open-account',
     selectionKey: 'accountType',
   },
   {
@@ -61,7 +77,7 @@ const FLOW_STEPS: FlowStep[] = [
       { id: 'yes', label: 'Yes, I started online' },
       { id: 'no', label: "No, I'll do it all in branch" },
     ],
-    condition: (s) => s.primaryTask === 'open-account',
+    condition: (s) => s.primaryTask === 'open-account' || s.visitReason === 'open-account',
     selectionKey: 'startedOnline',
   },
 

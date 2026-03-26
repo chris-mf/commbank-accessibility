@@ -126,6 +126,11 @@ export default function Chat() {
         processChoiceAnswer(matched, true);
         return;
       }
+      // For visit-reason step, accept free-text as a custom reason
+      if (currentStepId === 'visit-reason') {
+        processChoiceAnswer(text, true);
+        return;
+      }
     }
 
     // If current step expects text input, just use the text
@@ -278,7 +283,7 @@ export default function Chat() {
       type: 'choices',
       choices: [
         { id: 'book', label: 'Book an appointment (call branch)' },
-        { id: 'walk-in', label: "I'll walk in" },
+        { id: 'walk-in', label: "No booking required" },
       ],
       stage: Stage.BRANCH_FINDER,
     });
@@ -290,7 +295,7 @@ export default function Chat() {
     const finalSelections = { ...selections, appointmentType: apptType };
     setSelections(finalSelections);
 
-    const label = apptType === 'book' ? 'Book an appointment' : "I'll walk in";
+    const label = apptType === 'book' ? 'Book an appointment' : "No booking required";
     addMessage({
       id: `user-appt-${Date.now()}`,
       role: 'user',

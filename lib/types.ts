@@ -59,6 +59,7 @@ export interface BranchFeatures {
 export interface UserSelections {
   // Stage 1
   primaryTask?: string;
+  visitReason?: string;
   customerType?: string;
   accountType?: string;
   startedOnline?: string;

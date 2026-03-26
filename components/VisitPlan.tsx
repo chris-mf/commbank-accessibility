@@ -236,6 +236,23 @@ export default function VisitPlan({ selections }: VisitPlanProps) {
             Email me this plan
           </button>
         </div>
+        {branch && (
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${branch.address}, ${branch.suburb} ${branch.postcode}`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3.5 bg-white border-2 border-gray-900 text-gray-900 rounded-xl text-sm font-semibold
+                       hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2
+                       focus:ring-brand-yellow focus:ring-offset-2 cursor-pointer
+                       flex items-center justify-center gap-2"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            Open directions in Maps
+          </a>
+        )}
         <button
           onClick={() => window.location.reload()}
           className="w-full py-3 border-2 border-gray-300 text-gray-700 rounded-xl text-sm font-medium
