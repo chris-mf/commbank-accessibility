@@ -41,5 +41,3 @@ export const DEFAULT_CARDS: PrototypeCard[] = [
     status: 'coming-soon',
   },
 ];
-
-export const KV_KEY = 'cards';
